@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Pyodide</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+  </head>
+  <body>
+    <div id="side_by_side" style="display: flex;">
+      <textarea id="input" cols="80" rows="25">
+from sense_hat import SenseHat
+sense = SenseHat()
+#sense._motion.wait_for_motion()
+#sense._motion.wait_for_no_motion()
+print()
+print("motion_detected:", sense._motion.motion_detected)
+sense._motion.when_motion = lambda *args: None
+sense._motion.when_no_motion = lambda *args: None
+print("getIMUData:", sense._imu.getIMUData())
+print("_getFusionPose:", sense._imu._getFusionPose())
+print("pressureRead:", sense._pressure.pressureRead())
+print("humidityRead:", sense._humidity.humidityRead())
+device = sense._get_fb_device()
+device.setpixels(range(64), [[1, 1, 1]] * 64)
+device.setpixel(3, [5, 6, 7])
+print("getpixel:", device.getpixel(3))
+print("getpixels:", device.getpixels())
+print("colour_raw:", sense._colour.colour_raw)
+print("get_compass:", sense.get_compass())
+device.ioctl(SenseHat.SENSE_HAT_FB_FBIORESET_GAMMA, 1)
+buffer = [0] * 32
+device.ioctl(SenseHat.SENSE_HAT_FB_FBIOGET_GAMMA, buffer)
+print("GAMMA:", buffer)
+device.ioctl(SenseHat.SENSE_HAT_FB_FBIOSET_GAMMA, [1] * 32)
+      </textarea>
+      <div id="sense_hat_config" style="width: 50%"></div>
+    </div>
+
+    <br/>
+    <button id="run" disabled>Run</button>
+
+    <pre id="output">Loading pyodide...</pre>
+
+    <script type="module">
+      import * as _internal_sense_hat from "./_internal_sense_hat.js";
+
+      const runButton = document.getElementById("run");
+      const input = document.getElementById("input");
+      const output = document.getElementById("output");
+      const config = document.getElementById("sense_hat_config");
+
+      let pyodide;
+
+      const reloadPyodideToClearState = async () => {
+        pyodide = await loadPyodide({
+          stdout: (text) => output.innerHTML += text + "\n",
+        });
+
+        await pyodide.loadPackage(["pillow", "./sense_hat-0.0.1-py3-none-any.whl"]);
+        pyodide.registerJsModule("_internal_sense_hat", { ..._internal_sense_hat });
+
+        _internal_sense_hat.config.pyodide = pyodide;
+        _internal_sense_hat.config.emit = (event, ...args) => console.log(`sense_hat emitted ${event}: ${args}`);
+
+        runButton.disabled = false;
+
+        if (output.innerHTML === "Loading pyodide...") {
+          output.innerHTML = "";
+        }
+      };
+
+      const run = async () => {
+        output.innerHTML = "";
+        config.innerHTML = "";
+
+        try {
+          await pyodide.runPython(input.value);
+
+          const { pyodide: _, ...props } = _internal_sense_hat.config;
+          const json = JSON.stringify(props);
+
+          config.innerHTML = json;
+        } catch (error) {
+          console.log(error);
+        }
+
+        runButton.disabled = true;
+        reloadPyodideToClearState();
+      };
+
+      reloadPyodideToClearState();
+      runButton.addEventListener("click", run);
+    </script>
+  </body>
+</html>
